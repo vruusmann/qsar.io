@@ -43,8 +43,8 @@ The first column of the CDKDescUI output CSV file is fixed as `Title`. This must
 The RF model is trained and exported in PMML data format using the following R script:
 
 ```R
-library("pmml")
 library("randomForest")
+library("r2pmml")
 
 data = read.csv("ONSMP033.csv", header = TRUE, colClasses = rep("numeric", 281))
 
@@ -66,7 +66,7 @@ varImpPlot(data.rf)
 
 plot(data$mp, predict(data.rf))
 
-saveXML(pmml(data.rf), file = "ONSMP033.pmml")
+r2pmml(data.rf, file = "ONSMP033.pmml")
 ```
 
 The `MiningSchema` element of the RF model declares 56 `MiningField` elements - one for the dependent field and 55 for independent fields. It is not particulary easy to use this model for prediction, because the user must supply CDK descriptor values manually.
