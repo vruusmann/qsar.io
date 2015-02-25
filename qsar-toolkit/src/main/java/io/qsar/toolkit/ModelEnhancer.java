@@ -145,7 +145,7 @@ public class ModelEnhancer {
 			if(activeFields.contains(dataField.getName())){
 				it.remove();
 
-				DerivedField derivedField = new DerivedField(dataField.getOptype(), dataField.getDataType())
+				DerivedField derivedField = new DerivedField(dataField.getOpType(), dataField.getDataType())
 					.withName(dataField.getName())
 					.withExpression(createExpression((dataField.getName()).getValue(), structure));
 
