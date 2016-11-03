@@ -23,6 +23,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -41,13 +42,19 @@ import org.dmg.pmml.DerivedField;
 import org.dmg.pmml.Expression;
 import org.dmg.pmml.FieldName;
 import org.dmg.pmml.FieldRef;
-import org.dmg.pmml.LocalTransformations;
 import org.dmg.pmml.MiningField;
 import org.dmg.pmml.MiningSchema;
 import org.dmg.pmml.Model;
 import org.dmg.pmml.OpType;
 import org.dmg.pmml.PMML;
+import org.dmg.pmml.TransformationDictionary;
+import org.dmg.pmml.Visitor;
+import org.dmg.pmml.VisitorAction;
+import org.jpmml.model.MetroJAXBUtil;
 import org.jpmml.model.PMMLUtil;
+import org.jpmml.model.visitors.AbstractVisitor;
+import org.jpmml.model.visitors.DataDictionaryCleaner;
+import org.jpmml.model.visitors.TransformationDictionaryCleaner;
 
 public class ModelEnhancer {
 
@@ -96,7 +103,7 @@ public class ModelEnhancer {
 		pmml = enhance(pmml);
 
 		try(OutputStream os = new FileOutputStream(this.output)){
-			PMMLUtil.marshal(pmml, os);
+			MetroJAXBUtil.marshalPMML(pmml, os);
 		}
 	}
 
@@ -109,19 +116,21 @@ public class ModelEnhancer {
 
 		Model model = models.get(0);
 
-		FieldName structure = FieldName.create("structure");
+		final
+		FieldName structure = FieldName.create("SMILES");
 
 		DataDictionary dataDictionary = pmml.getDataDictionary();
 
-		LocalTransformations localTransformations = model.getLocalTransformations();
-		if(localTransformations == null){
-			localTransformations = new LocalTransformations();
+		TransformationDictionary transformationDictionary = pmml.getTransformationDictionary();
+		if(transformationDictionary == null){
+			transformationDictionary = new TransformationDictionary();
 
-			model.setLocalTransformations(localTransformations);
+			pmml.setTransformationDictionary(transformationDictionary);
 		}
 
 		MiningSchema miningSchema = model.getMiningSchema();
 
+		final
 		Set<FieldName> activeFields = getActiveFields(miningSchema);
 
 		for(Iterator<DataField> it = (dataDictionary.getDataFields()).iterator(); it.hasNext(); ){
@@ -134,21 +143,30 @@ public class ModelEnhancer {
 					.setName(dataField.getName())
 					.setExpression(createExpression((dataField.getName()).getValue(), structure));
 
-				localTransformations.addDerivedFields(derivedField);
+				transformationDictionary.addDerivedFields(derivedField);
 			}
 		}
 
 		dataDictionary.addDataFields(new DataField(structure, OpType.CATEGORICAL, DataType.STRING));
 
-		for(Iterator<MiningField> it = (miningSchema.getMiningFields()).iterator(); it.hasNext(); ){
-			MiningField miningField = it.next();
+		Visitor visitor = new AbstractVisitor(){
 
-			if(activeFields.contains(miningField.getName())){
-				it.remove();
+			@Override
+			public VisitorAction visit(MiningSchema miningSchema){
+				cleanMiningFields(miningSchema, activeFields);
+
+				// XXX
+				miningSchema.addMiningFields(new MiningField(structure));
+
+				return super.visit(miningSchema);
 			}
-		}
+		};
+		visitor.applyTo(pmml);
 
-		miningSchema.addMiningFields(new MiningField(structure));
+		List<Visitor> cleaners = Arrays.<Visitor>asList(new TransformationDictionaryCleaner(), new DataDictionaryCleaner());
+		for(Visitor cleaner : cleaners){
+			cleaner.applyTo(pmml);
+		}
 
 		return pmml;
 	}
@@ -174,6 +192,19 @@ public class ModelEnhancer {
 		}
 
 		return result;
+	}
+
+	static
+	private void cleanMiningFields(MiningSchema miningSchema, Set<FieldName> activeFields){
+		List<MiningField> miningFields = miningSchema.getMiningFields();
+
+		for(Iterator<MiningField> it = miningFields.iterator(); it.hasNext(); ){
+			MiningField miningField = it.next();
+
+			if(activeFields.contains(miningField.getName())){
+				it.remove();
+			}
+		}
 	}
 
 	static
