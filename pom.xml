@@ -5,7 +5,7 @@
 	<groupId>io.qsar</groupId>
 	<artifactId>qsar</artifactId>
 	<version>1.0-SNAPSHOT</version>
-	<packaging>pom</packaging>
+	<packaging>jar</packaging>
 
 	<licenses>
 		<license>
@@ -22,11 +22,6 @@
 		</developer>
 	</developers>
 
-	<modules>
-		<module>qsar-descriptor</module>
-		<module>qsar-toolkit</module>
-	</modules>
-
 	<scm>
 		<connection>scm:git:git@github.com:vruusmann/qsar.io.git</connection>
 		<developerConnection>scm:git:git@github.com:vruusmann/qsar.io.git</developerConnection>
@@ -38,36 +33,93 @@
 		<url>https://github.com/vruusmann/qsar.io/issues</url>
 	</issueManagement>
 
-	<dependencyManagement>
-		<dependencies>
-			<dependency>
-				<groupId>io.qsar</groupId>
-				<artifactId>qsar-descriptor</artifactId>
-				<version>1.0-SNAPSHOT</version>
-			</dependency>
-			<dependency>
-				<groupId>io.qsar</groupId>
-				<artifactId>qsar-toolkit</artifactId>
-				<version>1.0-SNAPSHOT</version>
-			</dependency>
+	<dependencies>
+		<dependency>
+			<groupId>com.beust</groupId>
+			<artifactId>jcommander</artifactId>
+			<version>1.35</version>
+		</dependency>
 
-			<dependency>
-				<groupId>org.jpmml</groupId>
-				<artifactId>pmml-evaluator</artifactId>
-				<version>1.1.16</version>
-			</dependency>
-		</dependencies>
-	</dependencyManagement>
+		<dependency>
+			<groupId>org.jpmml</groupId>
+			<artifactId>pmml-evaluator</artifactId>
+			<version>1.1.16</version>
+			<scope>provided</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>org.openscience.cdk</groupId>
+			<artifactId>cdk-data</artifactId>
+			<version>1.5.7</version>
+		</dependency>
+		<dependency>
+			<groupId>org.openscience.cdk</groupId>
+			<artifactId>cdk-fingerprint</artifactId>
+			<version>1.5.7</version>
+		</dependency>
+		<dependency>
+			<groupId>org.openscience.cdk</groupId>
+			<artifactId>cdk-qsarmolecular</artifactId>
+			<version>1.5.7</version>
+		</dependency>
+		<dependency>
+			<groupId>org.openscience.cdk</groupId>
+			<artifactId>cdk-signature</artifactId>
+			<version>1.5.7</version>
+		</dependency>
+		<dependency>
+			<groupId>org.openscience.cdk</groupId>
+			<artifactId>cdk-silent</artifactId>
+			<version>1.5.7</version>
+		</dependency>
+	</dependencies>
+
+	<repositories>
+		<repository>
+			<id>www.ebi.ac.uk</id>
+			<url>http://www.ebi.ac.uk/intact/maven/nexus/content/repositories/ebi-repo/</url>
+			<snapshots>
+				<enabled>false</enabled>
+			</snapshots>
+		</repository>
+	</repositories>
 
 	<build>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
-				<version>2.5.1</version>
+				<version>3.6.0</version>
 				<configuration>
 					<source>1.6</source>
 					<target>1.6</target>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-shade-plugin</artifactId>
+				<version>2.4.3</version>
+				<executions>
+					<execution>
+						<phase>package</phase>
+						<goals>
+							<goal>shade</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<createDependencyReducedPom>false</createDependencyReducedPom>
+					<filters>
+						<filter>
+							<artifact>*:*</artifact>
+							<excludes>
+								<exclude>META-INF/*.SF</exclude>
+								<exclude>META-INF/*.DSA</exclude>
+								<exclude>META-INF/*.RSA</exclude>
+							</excludes>
+						</filter>
+					</filters>
+					<finalName>${project.artifactId}-distributable-${project.version}</finalName>
 				</configuration>
 			</plugin>
 		</plugins>
