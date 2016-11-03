@@ -78,6 +78,8 @@ public class ModelEnhancer {
 		} catch(ParameterException pe){
 			commander.usage();
 
+			pe.printStackTrace(System.out);
+
 			System.exit(-1);
 		}
 

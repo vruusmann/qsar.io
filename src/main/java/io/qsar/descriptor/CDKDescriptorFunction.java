@@ -20,12 +20,14 @@ package io.qsar.descriptor;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import org.dmg.pmml.OpType;
 import org.jpmml.evaluator.EvaluationException;
 import org.jpmml.evaluator.FieldValue;
@@ -123,16 +125,8 @@ public class CDKDescriptorFunction extends AbstractFunction {
 		throw new FunctionException(this, null);
 	}
 
-	/**
-	 * Behave identically with CDK Descriptor GUI (https://github.com/rajarshi/cdkdescui)
-	 */
 	static
-	private String nameToId(String name){
-		return name.replace('-', '.');
-	}
-
-	static
-	private IAtomContainer parseAtomContainer(String structure){
+	public IAtomContainer parseAtomContainer(String structure){
 		SmilesParser parser = new SmilesParser(SilentChemObjectBuilder.getInstance());
 
 		try {
@@ -143,7 +137,7 @@ public class CDKDescriptorFunction extends AbstractFunction {
 	}
 
 	static
-	private IAtomContainer prepareAtomContainer(IAtomContainer structure) throws CDKException {
+	public IAtomContainer prepareAtomContainer(IAtomContainer structure) throws CDKException {
 
 		if(!ConnectivityChecker.isConnected(structure)){
 			throw new CDKException("The structure is not fully connected");
@@ -162,9 +156,24 @@ public class CDKDescriptorFunction extends AbstractFunction {
 	}
 
 	static
-	private IMolecularDescriptor getMolecularDescriptor(String id){
+	public Set<String> getMolecularDescriptorIds(){
+		return CDKDescriptorFunction.molecularDescriptorIds;
+	}
+
+	static
+	public IMolecularDescriptor getMolecularDescriptor(String id){
 		return CDKDescriptorFunction.molecularDescriptors.get(id);
 	}
+
+	/**
+	 * Behave identically with CDK Descriptor GUI (https://github.com/rajarshi/cdkdescui)
+	 */
+	static
+	private String nameToId(String name){
+		return name.replace('-', '.');
+	}
+
+	private static final Set<String> molecularDescriptorIds = Sets.<String>newLinkedHashSet();
 
 	private static final Map<String, IMolecularDescriptor> molecularDescriptors = Maps.<String, IMolecularDescriptor>newConcurrentMap();
 
@@ -177,7 +186,10 @@ public class CDKDescriptorFunction extends AbstractFunction {
 
 			String[] names = molecularDescriptor.getDescriptorNames();
 			for(int i = 0; i < names.length; i++){
-				CDKDescriptorFunction.molecularDescriptors.put(nameToId(names[i]), molecularDescriptor);
+				String id = nameToId(names[i]);
+
+				CDKDescriptorFunction.molecularDescriptorIds.add(id);
+				CDKDescriptorFunction.molecularDescriptors.put(id, molecularDescriptor);
 			}
 		}
 	}
@@ -189,6 +201,7 @@ public class CDKDescriptorFunction extends AbstractFunction {
 
 	private static final LoadingCache<String, IAtomContainer> atomContainerCache = CacheBuilder.newBuilder()
 		.expireAfterWrite(15, TimeUnit.MINUTES)
+		.maximumSize(100)
 		.build(new CacheLoader<String, IAtomContainer>(){
 
 			@Override
