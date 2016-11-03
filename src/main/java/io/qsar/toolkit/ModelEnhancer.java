@@ -28,8 +28,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-import javax.xml.transform.stream.StreamResult;
-
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
@@ -43,16 +41,13 @@ import org.dmg.pmml.DerivedField;
 import org.dmg.pmml.Expression;
 import org.dmg.pmml.FieldName;
 import org.dmg.pmml.FieldRef;
-import org.dmg.pmml.FieldUsageType;
 import org.dmg.pmml.LocalTransformations;
 import org.dmg.pmml.MiningField;
 import org.dmg.pmml.MiningSchema;
 import org.dmg.pmml.Model;
 import org.dmg.pmml.OpType;
 import org.dmg.pmml.PMML;
-import org.jpmml.model.ImportFilter;
-import org.jpmml.model.JAXBUtil;
-import org.xml.sax.InputSource;
+import org.jpmml.model.PMMLUtil;
 
 public class ModelEnhancer {
 
@@ -92,26 +87,14 @@ public class ModelEnhancer {
 	private void run() throws Exception {
 		PMML pmml;
 
-		InputStream is = new FileInputStream(this.input);
-
-		try {
-			InputSource source = new InputSource(is);
-
-			pmml = JAXBUtil.unmarshalPMML(ImportFilter.apply(source));
-		} finally {
-			is.close();
+		try(InputStream is = new FileInputStream(this.input)){
+			pmml = PMMLUtil.unmarshal(is);
 		}
 
 		pmml = enhance(pmml);
 
-		OutputStream os = new FileOutputStream(this.output);
-
-		try {
-			StreamResult result = new StreamResult(os);
-
-			JAXBUtil.marshalPMML(pmml, result);
-		} finally {
-			os.close();
+		try(OutputStream os = new FileOutputStream(this.output)){
+			PMMLUtil.marshal(pmml, os);
 		}
 	}
 
@@ -146,14 +129,14 @@ public class ModelEnhancer {
 				it.remove();
 
 				DerivedField derivedField = new DerivedField(dataField.getOpType(), dataField.getDataType())
-					.withName(dataField.getName())
-					.withExpression(createExpression((dataField.getName()).getValue(), structure));
+					.setName(dataField.getName())
+					.setExpression(createExpression((dataField.getName()).getValue(), structure));
 
-				localTransformations.withDerivedFields(derivedField);
+				localTransformations.addDerivedFields(derivedField);
 			}
 		}
 
-		dataDictionary.withDataFields(new DataField(structure, OpType.CATEGORICAL, DataType.STRING));
+		dataDictionary.addDataFields(new DataField(structure, OpType.CATEGORICAL, DataType.STRING));
 
 		for(Iterator<MiningField> it = (miningSchema.getMiningFields()).iterator(); it.hasNext(); ){
 			MiningField miningField = it.next();
@@ -163,18 +146,19 @@ public class ModelEnhancer {
 			}
 		}
 
-		miningSchema.withMiningFields(new MiningField(structure));
+		miningSchema.addMiningFields(new MiningField(structure));
 
 		return pmml;
 	}
 
 	static
 	private Set<FieldName> getActiveFields(MiningSchema miningSchema){
-		Set<FieldName> result = new LinkedHashSet<FieldName>();
+		Set<FieldName> result = new LinkedHashSet<>();
 
 		List<MiningField> miningFields = miningSchema.getMiningFields();
 		for(MiningField miningField : miningFields){
-			FieldUsageType usageType = miningField.getUsageType();
+			MiningField.UsageType usageType = miningField.getUsageType();
+
 			switch(usageType){
 				case ACTIVE:
 					result.add(miningField.getName());
@@ -193,7 +177,7 @@ public class ModelEnhancer {
 	static
 	private Expression createExpression(String function, FieldName structure){
 		Apply result = new Apply(CDKDescriptorFunction.class.getName())
-			.withExpressions(new Constant(function), new FieldRef(structure));
+			.addExpressions(new Constant(function), new FieldRef(structure));
 
 		return result;
 	}

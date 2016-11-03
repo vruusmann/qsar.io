@@ -26,6 +26,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Maps;
+import org.dmg.pmml.OpType;
 import org.jpmml.evaluator.EvaluationException;
 import org.jpmml.evaluator.FieldValue;
 import org.jpmml.evaluator.FieldValueUtil;
@@ -64,26 +65,26 @@ public class CDKDescriptorFunction extends AbstractFunction {
 
 		IMolecularDescriptor molecularDescriptor = getMolecularDescriptor(id);
 		if(molecularDescriptor == null){
-			throw new FunctionException(getName(), id);
+			throw new FunctionException(this, "No descriptor for \"" + id + "\"");
 		}
 
 		String structure = (values.get(1)).asString();
 
 		IAtomContainer molecule = getAtomContainer(structure);
 		if(molecule == null){
-			throw new FunctionException(getName(), structure);
+			throw new FunctionException(this, "No atom container for \"" + structure + "\"");
 		}
 
 		DescriptorValue value = molecularDescriptor.calculate(molecule);
 
 		Exception exception = value.getException();
 		if(exception != null){
-			throw new FunctionException(getName(), exception.toString());
+			throw new FunctionException(this, "Failed to calculate descriptor values: " + exception.toString());
 		}
 
 		Object result = getResult(id, molecularDescriptor.getDescriptorNames(), value.getValue());
 
-		return FieldValueUtil.create(result);
+		return FieldValueUtil.create(null, OpType.CONTINUOUS, result);
 	}
 
 	private Object getResult(String id, String[] names, IDescriptorResult result){
@@ -119,7 +120,7 @@ public class CDKDescriptorFunction extends AbstractFunction {
 			}
 		}
 
-		throw new FunctionException(getName(), id);
+		throw new FunctionException(this, null);
 	}
 
 	/**
