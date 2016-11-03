@@ -21,6 +21,7 @@ package io.qsar.descriptor;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.cache.CacheBuilder;
@@ -72,21 +73,31 @@ public class CDKDescriptorFunction extends AbstractFunction {
 
 		String structure = (values.get(1)).asString();
 
-		IAtomContainer molecule = getAtomContainer(structure);
-		if(molecule == null){
+		IAtomContainer atomContainer = getAtomContainer(structure);
+		if(atomContainer == null){
 			throw new FunctionException(this, "No atom container for \"" + structure + "\"");
 		}
 
-		DescriptorValue value = molecularDescriptor.calculate(molecule);
+		DescriptorValue descriptorValue;
 
-		Exception exception = value.getException();
-		if(exception != null){
-			throw new FunctionException(this, "Failed to calculate descriptor values: " + exception.toString());
+		try {
+			descriptorValue = getDescriptorValue(molecularDescriptor, atomContainer);
+		} catch(Exception e){
+			throw new FunctionException(this, "Failed to get or calculate descriptor value: " + e.toString());
 		}
 
-		Object result = getResult(id, molecularDescriptor.getDescriptorNames(), value.getValue());
+		Object result = getResult(id, molecularDescriptor.getDescriptorNames(), descriptorValue.getValue());
 
 		return FieldValueUtil.create(null, OpType.CONTINUOUS, result);
+	}
+
+	private DescriptorValue getDescriptorValue(IMolecularDescriptor molecularDescriptor, IAtomContainer atomContainer) throws Exception {
+
+		try {
+			return CDKDescriptorFunction.descriptorValueCache.get(new DescriptorValueKey(molecularDescriptor, atomContainer));
+		} catch(ExecutionException ee){
+			throw (Exception)ee.getCause();
+		}
 	}
 
 	private Object getResult(String id, String[] names, IDescriptorResult result){
@@ -199,6 +210,41 @@ public class CDKDescriptorFunction extends AbstractFunction {
 		return CDKDescriptorFunction.atomContainerCache.getUnchecked(structure);
 	}
 
+	static
+	private class DescriptorValueKey {
+
+		private IMolecularDescriptor molecularDescriptor;
+
+		private IAtomContainer atomContainer;
+
+
+		private DescriptorValueKey(IMolecularDescriptor molecularDescriptor, IAtomContainer atomContainer){
+			this.molecularDescriptor = molecularDescriptor;
+			this.atomContainer = atomContainer;
+		}
+
+		public DescriptorValue calculate(){
+			return this.molecularDescriptor.calculate(this.atomContainer);
+		}
+
+		@Override
+		public int hashCode(){
+			return System.identityHashCode(this.molecularDescriptor) ^ System.identityHashCode(this.atomContainer);
+		}
+
+		@Override
+		public boolean equals(Object object){
+
+			if(object instanceof DescriptorValueKey){
+				DescriptorValueKey that = (DescriptorValueKey)object;
+
+				return (this.molecularDescriptor == that.molecularDescriptor) && (this.atomContainer == that.atomContainer);
+			}
+
+			return false;
+		}
+	}
+
 	private static final LoadingCache<String, IAtomContainer> atomContainerCache = CacheBuilder.newBuilder()
 		.expireAfterWrite(15, TimeUnit.MINUTES)
 		.maximumSize(100)
@@ -207,6 +253,24 @@ public class CDKDescriptorFunction extends AbstractFunction {
 			@Override
 			public IAtomContainer load(String structure){
 				return parseAtomContainer(structure);
+			}
+		});
+
+	private static final LoadingCache<DescriptorValueKey, DescriptorValue> descriptorValueCache = CacheBuilder.newBuilder()
+		.expireAfterWrite(1, TimeUnit.MINUTES)
+		.maximumSize(100 * 100)
+		.build(new CacheLoader<DescriptorValueKey, DescriptorValue>(){
+
+			@Override
+			public DescriptorValue load(DescriptorValueKey descriptorValueKey) throws Exception {
+				DescriptorValue result = descriptorValueKey.calculate();
+
+				Exception exception = result.getException();
+				if(exception != null){
+					throw exception;
+				}
+
+				return result;
 			}
 		});
 }
